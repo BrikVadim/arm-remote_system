@@ -5,13 +5,16 @@
   "main": "Application.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-packager . myApp --platform=win32 --arch=x64 --electron-version=2.0.5 --app-version=0.1.0 --out=dist --ignore=dist --prune"
+    "build": "electron-packager . myApp --platform=win32 --arch=x64 --electron-version=2.0.5 --app-version=0.1.0 --out=dist --ignore=dist --prune",
+    "rebuild": "npm rebuild --runtime=electron --target=2.0.5 --disturl=https://atom.io/download/atom-shell --abi=64"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "electron": "^2.0.5",
+    "guid": "0.0.12",
+    "node-gyp": "^3.7.0",
     "peerjs": "^0.3.16"
   }
 }

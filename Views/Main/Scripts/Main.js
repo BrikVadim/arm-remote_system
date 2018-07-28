@@ -1,104 +1,94 @@
-const {desktopCapturer} = require('electron')
-const Peer = require("peerjs")
+const {desktopCapturer} = require('electron');
+const Peer = require("peerjs");
+const Guid = require("guid");
 
-const sourceOptions = {
-    types: ['window', 'screen']
+// MATCH LIB ==================
+
+const matched = subject => ({
+    on: () => matched(subject),
+    otherwise: () => subject
+})
+
+const match = subject => ({
+    on: (predicate, handler) => predicate(subject) ? matched(handler(subject)) : match(subject),
+    otherwise: handler => handler(subject)
+})
+
+const matchReciver = subjectObtainer => {
+    const comparator = {
+        value: null,
+        set: new_value => value = new_value
+    }
+
+    return {
+        is: value => option => comparator.set(value) == subjectObtainer(option),
+        not: value => option => comparator.set(value) != subjectObtainer(option)
+    }
 }
 
-const minWidthInput = document.getElementById("video-min-width")
-const maxWidthInput = document.getElementById("video-max-width")
-const minHeightInput = document.getElementById("video-min-height")
-const maxHeightInput = document.getElementById("video-max-height")
-const userIdInput = document.getElementById("user-id")
-const clientIdInput = document.getElementById("client-id")
-const registerButton = document.getElementById("register-button")
-const connectButton = document.getElementById("connect-button")
+// ============================
 
-let peer = null
+const minWidthInput  = document.querySelector("#video-min-width");
+const maxWidthInput  = document.querySelector("#video-max-width");
+const minHeightInput = document.querySelector("#video-min-height");
+const maxHeightInput = document.querySelector("#video-max-height");
+const userIdInput    = document.querySelector("#user-id");
+const clientIdInput  = document.querySelector("#client-id");
+const registerButton = document.querySelector("#register-button");
+const connectButton  = document.querySelector("#connect-button");
 
-registerButton.addEventListener("click", function () {
-    peer = new Peer(userIdInput.value, {
-        key: '8q4fi0nhuqt49529'
-    })
+let peer = null;
+let connection = null;
 
-    peer.on('connection', function (conn) {
-        alert("К вам подключились")
-    })
+const userId = Guid.raw();
 
-    peer.on('call', function (call) {
-        desktopCapturer.getSources(sourceOptions, (error, sources) => {
-            if (error) {
-                throw error
-            }
+const peerConfig = {
+    key: '8q4fi0nhuqt49529'
+};
 
-            navigator.mediaDevices.getUserMedia({
-                    audio: false,
-                    video: {
-                        mandatory: {
-                            chromeMediaSource: 'desktop',
-                            chromeMediaSourceId: sources[0].id,
-                            minWidth: minWidthInput.value,
-                            maxWidth: maxWidthInput.value,
-                            minHeight: minHeightInput.value,
-                            maxHeight: maxHeightInput.value
-                        }
-                    }
-                })
-                .then(handleStream)
-                .catch(handleError)
-        })
+registerButton.addEventListener("click", registerPeer);
 
-        function handleStream(stream) {
-            console.log(stream.constructor.name)
-            call.answer(stream)
+const getMediaSources = (options = { types: ['screen'] }) => new Promise((resolve, reject) => {
+    desktopCapturer.getSources(options, (error, sources) => error ? reject(error) : resolve(sources))
+});
+
+const handleMessage = recivedPackage => {
+    const message = matchReciver(data => data.message)
+
+    return match(recivedPackage)
+        .on(message.is("HANDSHAKE"),   ({data}) => console.log(data))
+        .on(message.is("FILESHARE"),   ({data}) => console.log(data))
+        .on(message.is("MOUSE_MOVE"),  ({x, y}) => console.log(x, y))
+        .on(message.is("MOUSE_CLICK"), ({x, y}) => console.log(x, y))
+        .otherwise(() => console.log("NONE"))
+};
+
+const messages = {
+    service: {
+        handshake: "HANDSHAKE"
+    },
+    request: {
+        sources: { message: "GET_SOURCES" }
+    },
+    control: {
+        keyboard: {
+
+        },
+        mouse: {
+
         }
+    }
+}
 
-        function handleError(e) {
-            console.log(e)
-        }
-    })
-})
+async function registerPeer() {
+    peer = new Peer(userId, peerConfig);
 
-connectButton.addEventListener("click", function () {
-    desktopCapturer.getSources(sourceOptions, (error, sources) => {
-        if (error) {
-            throw error
-        }
+    const sources = await getMediaSources();
 
-        navigator.mediaDevices.getUserMedia({
-                audio: false,
-                video: {
-                    mandatory: {
-                        chromeMediaSource: 'desktop',
-                        chromeMediaSourceId: sources[0].id,
-                        minWidth: minWidthInput.value,
-                        maxWidth: maxWidthInput.value,
-                        minHeight: minHeightInput.value,
-                        maxHeight: maxHeightInput.value
-                    }
-                }
-            })
-            .then(handleStream)
-            .catch(handleError)
+    peer.on("connection", async connection => {
+        connection.on("data", handleMessage);
+        connection.send(messages.request.sources);
+    }).on("call", async call => {
 
-        function handleStream(stream) {
-            const connection = peer.connect(clientIdInput.value)
-
-            connection.on('open', function () {
-                connection.on('data', function (data) {
-                    console.log('Received', data)
-                })
-            })
-            
-            const call = peer.call(clientIdInput.value, stream)
-            
-            call.on('stream', function (stream) {
-                document.querySelector('video').src = URL.createObjectURL(stream);
-            });
-        }
-
-        function handleError(e) {
-            console.log(e)
-        }
-    })
-})
+    });
+}
